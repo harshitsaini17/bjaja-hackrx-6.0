@@ -2,17 +2,23 @@
   "version": 2,
   "builds": [
     {
-      "src": "main.py",
+      "src": "api/main.py",
       "use": "@vercel/python"
     }
   ],
   "routes": [
     {
       "src": "/(.*)",
-      "dest": "main.py"
+      "dest": "api/main.py"
     }
   ],
   "env": {
-    "APP_MODULE": "main:app"
+    "PYTHON_VERSION": "3.9",
+    "APP_MODULE": "api.main:app"
+  },
+  "functions": {
+    "api/main.py": {
+      "maxDuration": 60
+    }
   }
 }
