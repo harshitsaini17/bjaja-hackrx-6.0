@@ -1,35 +1,27 @@
-# Vercel-optimized requirements for LLM Document Processing System
-# Minimal dependencies for production deployment
+# Ultra-minimal requirements for Vercel deployment
+# Optimized to avoid OOM errors
 
 # FastAPI Framework
 fastapi>=0.100.0
 uvicorn>=0.20.0
 
-# LLM and AI Dependencies - using more recent versions
-langchain>=0.1.0
-langchain-google-genai>=1.0.0
+# Google AI - core only
 google-generativeai>=0.3.0
 
 # Vector Database
 pinecone-client>=3.0.0
 
-# Text Processing - using compatible versions
-sentence-transformers>=2.2.0
+# Basic text processing
 pypdf2>=3.0.0
-python-docx>=1.0.0
 
-# Data Processing - using compatible versions
+# Data processing - essential only
 pydantic>=2.4.0
-numpy>=1.24.0
-pandas>=2.0.0
 
-# Environment Management
+# Environment
 python-dotenv>=1.0.0
 
-# HTTP and API
-httpx>=0.24.0
+# HTTP
 requests>=2.28.0
 
 # Utilities
 python-multipart>=0.0.6
-typing-extensions>=4.5.0

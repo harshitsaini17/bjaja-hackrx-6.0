@@ -19,27 +19,21 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(current_dir)
 sys.path.append(os.path.dirname(current_dir))
 
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 # Import our modules with error handling
 try:
     from general_document_processor import GeneralDocumentProcessor
 except ImportError as e:
-    # Fallback import
+    # Fallback to lightweight processor
     try:
-        import importlib.util
-        spec = importlib.util.spec_from_file_location(
-            "general_document_processor", 
-            os.path.join(current_dir, "general_document_processor.py")
-        )
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        GeneralDocumentProcessor = module.GeneralDocumentProcessor
-    except Exception as fallback_error:
+        from lightweight_processor import LightweightDocumentProcessor as GeneralDocumentProcessor
+        logger.info("Using lightweight processor for Vercel deployment")
+    except ImportError as fallback_error:
         GeneralDocumentProcessor = None
-        import_error = f"Failed to import GeneralDocumentProcessor: {str(e)}, Fallback: {str(fallback_error)}"
-
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+        import_error = f"Failed to import any processor: {str(e)}, Fallback: {str(fallback_error)}"
 
 # Initialize FastAPI app
 app = FastAPI(
