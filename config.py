@@ -31,8 +31,8 @@ class Settings(BaseModel):
     chunk_overlap: int = 200
     max_chunks_per_page: int = 5
     
-    # Search Configuration
-    search_top_k: int = 10
+    # Search Configuration  
+    search_top_k: int = 5  # Limited to max 5 chunks for context
     similarity_threshold: float = 0.7
     confidence_thresholds: Dict[str, float] = {
         "high": 0.8,
@@ -56,8 +56,12 @@ class Settings(BaseModel):
 
 def load_settings() -> Settings:
     """Load settings from environment variables"""
-    from dotenv import load_dotenv
-    load_dotenv()
+    try:
+        from dotenv import load_dotenv
+        load_dotenv()
+    except ImportError:
+        # dotenv not available, continue with environment variables
+        pass
     
     return Settings(
         gemini_api_key=os.getenv("GEMINI_API_KEY", ""),

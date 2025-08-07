@@ -272,12 +272,12 @@ Make queries specific and relevant to the procedure and category.
             for query in search_queries[:3]:  # Limit to top 3 queries
                 results = self.vector_store.search_similar(
                     query=query,
-                    top_k=3
+                    top_k=2  # Max 2 results per query to stay within 5 total
                 )
                 all_results.extend(results)
             
-            # Deduplicate and return top results
-            return self._deduplicate_results(all_results)[:8]
+            # Deduplicate and return top results (max 5)
+            return self._deduplicate_results(all_results)[:5]
             
         except Exception as e:
             logger.error(f"Error in LLM search enhancement: {str(e)}")

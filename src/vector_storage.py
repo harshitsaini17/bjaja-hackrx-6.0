@@ -222,9 +222,11 @@ class VectorStoreManager:
         return stored_ids
     
     def search_similar(self, query: str, top_k: int = None, filter_dict: Dict = None) -> List[Dict]:
-        """Search for similar chunks in Pinecone"""
+        """Search for similar chunks in Pinecone with max 5 results"""
         if top_k is None:
-            top_k = settings.search_top_k
+            top_k = min(settings.search_top_k, 5)  # Ensure max 5 chunks
+        else:
+            top_k = min(top_k, 5)  # Enforce max 5 limit
         
         try:
             # Generate query embedding
@@ -248,7 +250,7 @@ class VectorStoreManager:
                 }
                 results.append(result)
             
-            logger.info(f"Found {len(results)} similar chunks for query")
+            logger.info(f"Found {len(results)} similar chunks for query (max 5 enforced)")
             return results
             
         except Exception as e:
