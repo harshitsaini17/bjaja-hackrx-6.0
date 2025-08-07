@@ -37,13 +37,15 @@ class DecisionType(Enum):
 
 @dataclass
 class DocumentClause:
-    """Represents a relevant document clause"""
+    """Represents a relevant document clause with original text"""
     clause_id: str
-    text: str
+    original_text: str  # Full original text from document
+    summary: str  # Processed/summarized content
     document: str
     page: int
     relevance_score: float
     clause_type: str
+    source_reference: str  # Reference identifier
 
 
 @dataclass
@@ -116,7 +118,9 @@ class GeneralDocumentProcessor:
             # Step 3: Make decision based on retrieved content
             decision = self._make_informed_decision(parsed_query, relevant_chunks)
             
-            # Step 4: Generate final response
+            # Step 4: Generate final response with clause details
+            clause_details = decision.get("clause_details", [])
+            
             final_decision = DocumentDecision(
                 decision=decision["decision"],
                 amount=decision.get("amount"),
@@ -129,7 +133,9 @@ class GeneralDocumentProcessor:
                     "chunks_analyzed": len(relevant_chunks),
                     "model_used": settings.gemini_model,
                     "parsed_query": asdict(parsed_query),
-                    "system_version": "1.0_General_Purpose"
+                    "system_version": "1.0_General_Purpose_Optimized",
+                    "clause_details": clause_details,  # Include original text and details
+                    "optimization_notes": "Reduced LLM calls, faster search, original text preserved"
                 },
                 query_id=query_id,
                 timestamp=time.time()
@@ -233,56 +239,42 @@ Focus on extracting the core intent and relevant details for document search.
         )
     
     def _search_relevant_content(self, parsed_query: ParsedQuery) -> List[Dict]:
-        """Search for relevant content with max 5 chunks"""
+        """Search for relevant content with max 5 chunks - OPTIMIZED"""
         
-        search_prompt = f"""
-You are a document search expert. Generate targeted search queries to find relevant information for this request.
-
-QUERY DETAILS:
-- Type: {parsed_query.query_type}
-- Action: {parsed_query.action_requested}
-- Context: {parsed_query.document_context}
-- Keywords: {parsed_query.keywords}
-- Entity Details: {parsed_query.entity_details}
-
-Generate 3-5 specific search queries that would find relevant clauses, rules, or information from documents.
-
-Focus on finding:
-1. Main coverage/applicability rules
-2. Conditions and requirements
-3. Exclusions or limitations
-4. Amounts, limits, or calculations
-5. Time-related constraints
-
-Respond with JSON array of search queries:
-["query1", "query2", "query3", "query4", "query5"]
-
-Make queries specific and targeted to the document type and user intent.
-"""
+        # Faster search with optimized prompts
+        search_queries = self._generate_optimized_search_queries(parsed_query)
         
-        try:
-            response = self.llm.invoke(search_prompt)
-            response_text = str(response).strip()
-            
-            json_text = self._extract_json_from_response(response_text)
-            search_queries = json.loads(json_text)
-            
-            # Execute searches with limited results
-            all_results = []
-            for query in search_queries[:3]:  # Max 3 search queries
-                results = self.vector_store.search_similar(
-                    query=query,
-                    top_k=2  # Max 2 results per query
-                )
-                all_results.extend(results)
-            
-            # Deduplicate and limit to top 5 chunks
-            return self._deduplicate_results(all_results)[:5]
-            
-        except Exception as e:
-            logger.error(f"Error in content search: {str(e)}")
-            # Fallback search
-            return self._basic_search(parsed_query)
+        # Execute searches with limited results
+        all_results = []
+        for query in search_queries[:2]:  # Reduced to 2 queries for speed
+            results = self.vector_store.search_similar(
+                query=query,
+                top_k=3  # Max 3 results per query
+            )
+            all_results.extend(results)
+        
+        # Deduplicate and limit to top 5 chunks
+        return self._deduplicate_results(all_results)[:5]
+    
+    def _generate_optimized_search_queries(self, parsed_query: ParsedQuery) -> List[str]:
+        """Generate optimized search queries without LLM for speed"""
+        queries = []
+        
+        # Primary query based on parsed content
+        if parsed_query.keywords:
+            primary_keywords = " ".join(parsed_query.keywords[:3])
+            queries.append(primary_keywords)
+        
+        # Secondary query for specific context
+        if parsed_query.query_type and parsed_query.action_requested:
+            context_query = f"{parsed_query.action_requested} {parsed_query.document_context or ''}"
+            queries.append(context_query)
+        
+        # Fallback to raw query
+        if not queries:
+            queries.append(parsed_query.raw_query)
+        
+        return queries
     
     def _basic_search(self, parsed_query: ParsedQuery) -> List[Dict]:
         """Fallback search using basic keywords"""
@@ -295,50 +287,41 @@ Make queries specific and targeted to the document type and user intent.
         return []
     
     def _make_informed_decision(self, parsed_query: ParsedQuery, relevant_chunks: List[Dict]) -> Dict:
-        """Make decision based on retrieved content"""
+        """Make decision based on retrieved content - OPTIMIZED with original text"""
         
-        # Format context from chunks
-        context_text = self._format_context(relevant_chunks)
+        # Extract clause information with original text
+        clauses_info = self._extract_clause_information(relevant_chunks)
         
+        # Format context from chunks with original text
+        context_text = self._format_optimized_context(relevant_chunks)
+        
+        # Simplified decision prompt for faster processing
         decision_prompt = f"""
-You are an expert document analyst. Analyze the query against the retrieved document content and provide a structured decision.
+Analyze this query against document content and decide:
 
-QUERY DETAILS:
-- Original Query: {parsed_query.raw_query}
-- Query Type: {parsed_query.query_type}
-- Action Requested: {parsed_query.action_requested}
-- Entity Details: {parsed_query.entity_details}
-- Amount Mentioned: {parsed_query.amount_mentioned}
-- Time Constraints: {parsed_query.time_constraints}
+QUERY: {parsed_query.raw_query}
+TYPE: {parsed_query.query_type}
+ACTION: {parsed_query.action_requested}
 
-RELEVANT DOCUMENT CONTENT:
+DOCUMENT CLAUSES:
 {context_text}
 
-ANALYSIS FRAMEWORK:
-1. Determine if the request is covered/applicable based on document content
-2. Check for any conditions, requirements, or constraints
-3. Identify applicable amounts, limits, or calculations
-4. Note any exclusions or limitations
-5. Reference specific clauses that support the decision
-
-Respond ONLY with valid JSON:
+Respond ONLY with JSON:
 {{
     "decision": "approved|rejected|conditional|review_required",
-    "amount": <applicable amount/limit if relevant, null otherwise>,
-    "justification": "Clear explanation of the decision with specific reasoning",
-    "clause_references": ["clause_id_1", "clause_id_2", "..."],
-    "confidence": <0.0_to_1.0>,
-    "conditions": ["any conditions that apply"],
-    "exclusions_noted": ["any relevant exclusions"]
+    "amount": <number or null>,
+    "justification": "Brief explanation referencing specific clauses",
+    "clause_references": ["clause_1", "clause_2"],
+    "confidence": <0.0_to_1.0>
 }}
 
-DECISION GUIDELINES:
-- "approved": Request is clearly covered/applicable
-- "rejected": Request is clearly not covered/excluded
-- "conditional": Covered but with specific conditions
-- "review_required": Unclear from available information
+RULES:
+- "approved": Clearly covered
+- "rejected": Clearly excluded  
+- "conditional": Covered with conditions
+- "review_required": Unclear/insufficient info
 
-Be specific and reference the document content that supports your decision.
+Be concise and reference clauses by their IDs.
 """
         
         try:
@@ -348,19 +331,43 @@ Be specific and reference the document content that supports your decision.
             json_text = self._extract_json_from_response(response_text)
             decision_data = json.loads(json_text)
             
-            return {
+            # Add clause details with original text
+            enhanced_decision = {
                 "decision": decision_data.get("decision", "review_required"),
                 "amount": decision_data.get("amount"),
                 "justification": decision_data.get("justification", "Decision based on document analysis"),
                 "clause_references": decision_data.get("clause_references", []),
                 "confidence": float(decision_data.get("confidence", 0.5)),
-                "conditions": decision_data.get("conditions", []),
-                "exclusions": decision_data.get("exclusions_noted", [])
+                "clause_details": clauses_info  # Include original text and details
             }
+            
+            return enhanced_decision
             
         except Exception as e:
             logger.error(f"Error in decision making: {str(e)}")
             return self._fallback_decision(parsed_query)
+    
+    def _extract_clause_information(self, relevant_chunks: List[Dict]) -> List[Dict]:
+        """Extract clause information including original text"""
+        clauses_info = []
+        
+        for i, chunk in enumerate(relevant_chunks):
+            metadata = chunk.get('metadata', {})
+            
+            clause_info = {
+                "clause_id": f"CLAUSE_{i+1}",
+                "clause_reference": metadata.get('clause_reference', f"REF_{i+1}"),
+                "original_text": metadata.get('original_text', metadata.get('content', '')),
+                "summary": metadata.get('summary', ''),
+                "source_document": metadata.get('source_document', 'Unknown'),
+                "source_page": metadata.get('source_page', 0),
+                "relevance_score": chunk.get('score', 0.0),
+                "keywords": metadata.get('keywords', [])
+            }
+            
+            clauses_info.append(clause_info)
+        
+        return clauses_info
     
     def _fallback_decision(self, parsed_query: ParsedQuery) -> Dict:
         """Fallback decision if LLM fails"""
@@ -414,8 +421,29 @@ Be specific and reference the document content that supports your decision.
         
         raise ValueError("No valid JSON found in response")
     
+    def _format_optimized_context(self, relevant_chunks: List[Dict]) -> str:
+        """Format document context for LLM - OPTIMIZED for speed"""
+        context_sections = []
+        
+        for i, chunk in enumerate(relevant_chunks):
+            metadata = chunk.get('metadata', {})
+            summary = metadata.get('summary', '')
+            original_content = metadata.get('original_text', metadata.get('content', ''))
+            score = chunk.get('score', 0.0)
+            doc_name = metadata.get('source_document', 'Unknown')
+            
+            # Use summary for faster processing, keep original available
+            display_content = summary if summary else original_content[:300]
+            
+            context_sections.append(f"""
+CLAUSE_{i+1} (Score: {score:.2f}, Doc: {doc_name}):
+{display_content}
+""")
+        
+        return "\n".join(context_sections)
+    
     def _format_context(self, relevant_chunks: List[Dict]) -> str:
-        """Format document context for LLM"""
+        """Format document context for LLM - LEGACY METHOD"""
         context_sections = []
         
         for i, chunk in enumerate(relevant_chunks):

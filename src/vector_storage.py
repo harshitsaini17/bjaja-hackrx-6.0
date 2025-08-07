@@ -189,10 +189,11 @@ class VectorStoreManager:
                     
                     embedding = self.generate_embedding(content_for_embedding)
                     
-                    # Prepare metadata
+                    # Prepare metadata with original text preservation
                     metadata = {
                         "chunk_id": chunk.chunk_id,
-                        "content": chunk.content[:1000],
+                        "content": chunk.content[:1000],  # Processed/summarized content
+                        "original_text": chunk.content,  # Store full original text
                         "chunk_type": chunk.chunk_type.value,
                         "source_page": chunk.source_page,
                         "source_document": os.path.basename(chunk.source_document),
@@ -201,7 +202,8 @@ class VectorStoreManager:
                         "summary": chunk.summary[:500],
                         "importance_score": chunk.importance_score,
                         "creation_timestamp": chunk.metadata.get("creation_timestamp", time.time()),
-                        "relationships": chunk.relationships[:5]
+                        "relationships": chunk.relationships[:5],
+                        "clause_reference": f"{os.path.basename(chunk.source_document)}_PAGE_{chunk.source_page}_CHUNK_{chunk.chunk_id}"
                     }
                     
                     batch_vectors.append((chunk.chunk_id, embedding, metadata))

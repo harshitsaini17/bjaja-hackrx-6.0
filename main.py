@@ -70,9 +70,17 @@ class DocumentQueryResponse(BaseModel):
                 "justification": "Knee surgery is covered under surgical procedures section. Policy waiting period of 2 years has been met with 3-month policy (mapped to clause SEC_4_2).",
                 "clause_references": ["SEC_4_2", "WAIT_2_1", "GEOG_3_1"],
                 "confidence": 0.92,
-                "processing_time_seconds": 18.5,
+                "processing_time_seconds": 8.5,
                 "query_id": "doc_query_1754568526",
                 "timestamp": "2025-08-07T10:30:00Z",
+                "clause_details": [
+                    {
+                        "clause_id": "CLAUSE_1",
+                        "original_text": "Surgical procedures including orthopedic surgeries are covered...",
+                        "source_document": "policy.pdf",
+                        "source_page": 15
+                    }
+                ],
                 "metadata": {
                     "chunks_analyzed": 5,
                     "model_used": "gemini-2.5-flash",
@@ -90,6 +98,7 @@ class DocumentQueryResponse(BaseModel):
     processing_time_seconds: float = Field(..., description="Time taken to process")
     query_id: str = Field(..., description="Unique query identifier")
     timestamp: str = Field(..., description="ISO timestamp")
+    clause_details: List[Dict[str, Any]] = Field(default=[], description="Original text and details of referenced clauses")
     metadata: Dict[str, Any] = Field(default={}, description="Additional processing metadata")
 
 class HealthResponse(BaseModel):
@@ -158,7 +167,9 @@ async def process_document_query(request: DocumentQueryRequest):
         
         processing_time = time.time() - start_time
         
-        # Create response matching problem statement format
+        # Create response matching problem statement format with clause details
+        clause_details = decision.processing_metadata.get("clause_details", [])
+        
         response = DocumentQueryResponse(
             decision=decision.decision,
             amount=decision.amount,
@@ -168,6 +179,7 @@ async def process_document_query(request: DocumentQueryRequest):
             processing_time_seconds=round(processing_time, 2),
             query_id=decision.query_id,
             timestamp=datetime.now().isoformat(),
+            clause_details=clause_details,  # Include original text and details
             metadata=decision.processing_metadata or {}
         )
         
