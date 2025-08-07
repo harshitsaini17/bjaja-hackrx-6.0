@@ -15,10 +15,27 @@ import time
 from datetime import datetime
 
 # Add parent directory to Python path for imports
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+current_dir = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(current_dir)
+sys.path.append(os.path.dirname(current_dir))
 
-# Import our modules
-from general_document_processor import GeneralDocumentProcessor
+# Import our modules with error handling
+try:
+    from general_document_processor import GeneralDocumentProcessor
+except ImportError as e:
+    # Fallback import
+    try:
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "general_document_processor", 
+            os.path.join(current_dir, "general_document_processor.py")
+        )
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        GeneralDocumentProcessor = module.GeneralDocumentProcessor
+    except Exception as fallback_error:
+        GeneralDocumentProcessor = None
+        import_error = f"Failed to import GeneralDocumentProcessor: {str(e)}, Fallback: {str(fallback_error)}"
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -47,8 +64,12 @@ document_processor = None
 processor_error = None
 
 try:
-    document_processor = GeneralDocumentProcessor()
-    logger.info("Document processor initialized successfully")
+    if GeneralDocumentProcessor is not None:
+        document_processor = GeneralDocumentProcessor()
+        logger.info("Document processor initialized successfully")
+    else:
+        processor_error = import_error if 'import_error' in locals() else "GeneralDocumentProcessor not available"
+        logger.error(f"Document processor not available: {processor_error}")
 except Exception as e:
     logger.error(f"Failed to initialize document processor: {str(e)}")
     processor_error = str(e)

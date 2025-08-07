@@ -1,0 +1,30 @@
+# Alternative minimal requirements for Vercel deployment
+# Use this if the main requirements.txt still causes issues
+
+# Core FastAPI
+fastapi
+uvicorn
+
+# Google AI
+google-generativeai
+langchain-google-genai
+
+# Vector Database
+pinecone-client
+
+# Text Processing (minimal)
+sentence-transformers
+pypdf2
+
+# Data Processing
+pydantic>=2.0.0
+numpy
+
+# Environment
+python-dotenv
+
+# HTTP
+requests
+
+# Utilities
+python-multipart
